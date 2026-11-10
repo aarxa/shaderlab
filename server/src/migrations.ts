@@ -36,6 +36,19 @@ export const MIGRATIONS: Migration[] = [
     // Matches the gallery query's ORDER BY exactly, so Postgres can walk the index instead of sorting.
     sql: `CREATE INDEX shaders_created_at_id ON shaders (created_at DESC, id DESC);`,
   },
+  {
+    version: 4,
+    name: 'thumbnails',
+    // A separate table, not a column on shaders: the gallery list and room loads never read image
+    // bytes they don't need, and a thumbnail upload doesn't rewrite the (larger) document row.
+    sql: `
+      CREATE TABLE thumbnails (
+        shader_id     TEXT PRIMARY KEY REFERENCES shaders(id) ON DELETE CASCADE,
+        image         BYTEA NOT NULL,
+        content_type  TEXT NOT NULL,
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+      );`,
+  },
 ];
 
 // Arbitrary constant: every server instance asks for the same advisory lock number.

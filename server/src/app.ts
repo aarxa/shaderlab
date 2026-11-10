@@ -14,6 +14,7 @@ import * as metrics from './metrics.js';
 import { registry } from './metrics.js';
 import client from 'prom-client';
 import { cleanTitle, type PageKey, type Store } from './store.js';
+import { THUMB_MAX_BYTES, THUMB_TYPES, WriteLimiter, checkThumbnail } from './thumbnails.js';
 
 // 10 chars from a 56-symbol alphabet (no look-alikes): ~58 bits, unguessable enough for share links.
 const ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -69,6 +70,8 @@ export interface AppOptions {
    * heap ran out. Refusing extra users keeps the ones already connected working.
    */
   maxConnections?: number;
+  /** Minimum time between stored thumbnail writes for one shader (default 10 s). */
+  thumbnailIntervalMs?: number;
   logger?: boolean;
 }
 
@@ -132,6 +135,8 @@ export async function buildApp(opts: AppOptions) {
     doc.destroy();
     const newId = newShaderId();
     await opts.store.create(newId, state, { title, forkedFrom: id });
+    // Same code, so the same picture, until someone edits the fork and a new one is captured.
+    await opts.store.copyThumbnail(id, newId);
     reply.code(201);
     return { id: newId };
   });
@@ -141,6 +146,49 @@ export async function buildApp(opts: AppOptions) {
     const meta = await opts.store.meta(req.params.id);
     if (!meta) return reply.code(404).send({ error: 'not found' });
     return meta;
+  });
+
+  // Thumbnails. The browser of whoever is editing captures the live preview and uploads it here.
+  // Raw image body (not JSON or multipart): the parser hands the route a Buffer.
+  app.addContentTypeParser([...THUMB_TYPES], { parseAs: 'buffer', bodyLimit: THUMB_MAX_BYTES }, (_req, body, done) =>
+    done(null, body),
+  );
+  const thumbLimiter = new WriteLimiter(opts.thumbnailIntervalMs ?? 10_000);
+
+  app.put<{ Params: { id: string }; Body: Buffer }>('/api/shaders/:id/thumbnail', async (req, reply) => {
+    const { id } = req.params;
+    if (!ID_RE.test(id)) return reply.code(400).send({ error: 'bad id' });
+    if (!Buffer.isBuffer(req.body)) return reply.code(415).send({ error: `send ${THUMB_TYPES.join(', ')}` });
+    const checked = checkThumbnail(req.body);
+    if ('error' in checked) return reply.code(400).send({ error: checked.error });
+    // Checked after validation, so a rejected upload doesn't use up the shader's write slot.
+    const waitMs = thumbLimiter.take(id);
+    if (waitMs > 0) {
+      reply.header('Retry-After', String(Math.ceil(waitMs / 1000)));
+      return reply.code(429).send({ error: 'thumbnail updated too recently' });
+    }
+    // Stored as the type found in the bytes, not the one the client declared.
+    if (!(await opts.store.saveThumbnail(id, req.body, checked.info.type))) return reply.code(404).send({ error: 'not found' });
+    return reply.code(204).send();
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { v?: string } }>('/api/shaders/:id/thumbnail', async (req, reply) => {
+    if (!ID_RE.test(req.params.id)) return reply.code(400).send({ error: 'bad id' });
+    const thumb = await opts.store.loadThumbnail(req.params.id);
+    if (!thumb) return reply.code(404).send({ error: 'no thumbnail' });
+    const etag = `"${thumb.updatedAt.getTime()}"`;
+    reply
+      .header('ETag', etag)
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Content-Security-Policy', "default-src 'none'")
+      // The gallery asks for ?v=<thumbnailAt>, a URL that only ever means one image, so the browser
+      // may keep it forever. Without ?v (or with a stale one) it must revalidate with the ETag.
+      .header(
+        'Cache-Control',
+        req.query.v === String(thumb.updatedAt.getTime()) ? 'public, max-age=31536000, immutable' : 'no-cache',
+      );
+    if (req.headers['if-none-match'] === etag) return reply.code(304).send();
+    return reply.type(thumb.contentType).send(Buffer.from(thumb.image));
   });
 
   if (opts.staticDir && existsSync(opts.staticDir)) {

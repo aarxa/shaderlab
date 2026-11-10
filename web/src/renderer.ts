@@ -129,6 +129,32 @@ export class ShaderRenderer {
     this.frameMs = this.frameMs * 0.9 + (performance.now() - t0) * 0.1;
   }
 
+  /**
+   * Draws one frame right now and returns it as a small image (center-cropped to w×h), or null if
+   * nothing has compiled yet. The canvas uses preserveDrawingBuffer: false (faster), which means
+   * its pixels are only readable until the frame is shown, so we draw and copy in the same task
+   * instead of reading whatever the last animation frame left behind.
+   */
+  async capture(w = 320, h = 180): Promise<Blob | null> {
+    if (!this.program) return null;
+    this.draw();
+    const sw = this.canvas.width, sh = this.canvas.height;
+    if (!sw || !sh) return null;
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const ctx = out.getContext('2d');
+    if (!ctx) return null;
+    const scale = Math.max(w / sw, h / sh); // "cover": fill the thumbnail, crop the overflow
+    const cw = w / scale, ch = h / scale;
+    ctx.drawImage(this.canvas, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, w, h);
+    const toBlob = (type: string, q: number) => new Promise<Blob | null>((r) => out.toBlob(r, type, q));
+    // WebP is ~30% smaller than JPEG here. Browsers that can't encode WebP (Safari) silently return
+    // a PNG instead, which is much larger for noisy shader output, so fall back to JPEG.
+    const webp = await toBlob('image/webp', 0.8);
+    return webp?.type === 'image/webp' ? webp : toBlob('image/jpeg', 0.85);
+  }
+
   dispose() {
     cancelAnimationFrame(this.raf);
     if (this.program) this.gl.deleteProgram(this.program);

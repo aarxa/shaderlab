@@ -47,6 +47,10 @@ Reproduce: `docker compose -f docker-compose.yml -f docker-compose.load.yml up -
 - **Titles, forks, gallery**: titles sync live; Fork copies the current code (including unsaved live
   edits) into a new shader linked to its original; `/gallery` lists every shader newest first with
   cursor pagination. Schema changes go through numbered migrations. Walkthrough: docs/M2_EXPLAINED.md.
+- **Thumbnails**: the editor of whoever is typing captures its live preview (320×180 WebP, JPEG on Safari)
+  a few seconds after a successful compile and uploads it. The server checks the real format from the
+  file's bytes, size and dimension limits, and a per-shader write rate, then serves versioned URLs that
+  browsers cache forever. Walkthrough: docs/THUMBNAILS_EXPLAINED.md.
 
 ## Architecture
 ```
@@ -57,7 +61,8 @@ Reproduce: `docker compose -f docker-compose.yml -f docker-compose.load.yml up -
  │   └─► ShaderRenderer (WebGL2) │  awareness    │  • relays updates, persists  │ snapshots  timestamps)
  └───────────────────────────────┘   protocol    │  • unloads idle rooms        │      └──────────┘
           HTTP: POST /api/shaders, GET /api/shaders (gallery), GET /api/shaders/:id,
-                POST /api/shaders/:id/fork, GET /api/health
+                POST /api/shaders/:id/fork,
+                PUT|GET /api/shaders/:id/thumbnail, GET /api/health
 ```
 - `server/src/collab.ts`: the sync server. Implements the Yjs sync + awareness wire protocol directly
   (it interoperates with the standard `y-websocket` client), tracks which presence ids each socket
