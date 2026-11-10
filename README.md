@@ -18,6 +18,9 @@ through the server). Load testing with many concurrent editors is milestone M5.
 - **Real-time collaboration**: concurrent edits merge through a CRDT (Yjs), so there are no locks and
   no "someone else is editing" conflicts. Presence shows who is in the room and where their cursor is.
 - **Persistence**: documents are stored in Postgres as compact CRDT snapshots and survive restarts.
+- **Titles, forks, gallery**: titles sync live; Fork copies the current code (including unsaved live
+  edits) into a new shader linked to its original; `/gallery` lists every shader newest first with
+  cursor pagination. Schema changes go through numbered migrations. Walkthrough: docs/M2_EXPLAINED.md.
 
 ## Architecture
 ```
@@ -27,7 +30,8 @@ through the server). Load testing with many concurrent editors is milestone M5.
  │   │                           │  Yjs sync +   │  • live Y.Doc + Awareness    │ debounced  (id, ydoc_state,
  │   └─► ShaderRenderer (WebGL2) │  awareness    │  • relays updates, persists  │ snapshots  timestamps)
  └───────────────────────────────┘   protocol    │  • unloads idle rooms        │      └──────────┘
-          HTTP: POST /api/shaders, GET /api/shaders/:id, GET /api/health
+          HTTP: POST /api/shaders, GET /api/shaders (gallery), GET /api/shaders/:id,
+                POST /api/shaders/:id/fork, GET /api/health
 ```
 - `server/src/collab.ts`: the sync server. Implements the Yjs sync + awareness wire protocol directly
   (it interoperates with the standard `y-websocket` client), tracks which presence ids each socket
