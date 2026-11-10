@@ -6,10 +6,13 @@ import type { Duplex } from 'node:stream';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { customAlphabet } from 'nanoid';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, type WebSocket } from 'ws';
 import * as Y from 'yjs';
 
 import { RoomManager, initialState } from './collab.js';
+import * as metrics from './metrics.js';
+import { registry } from './metrics.js';
+import client from 'prom-client';
 import { cleanTitle, type PageKey, type Store } from './store.js';
 
 // 10 chars from a 56-symbol alphabet (no look-alikes): ~58 bits, unguessable enough for share links.
@@ -55,14 +58,36 @@ export interface AppOptions {
   store: Store;
   staticDir?: string;
   persistDebounceMs?: number;
+  /** How often to ping WebSocket clients; a client that hasn't answered the previous ping is dropped. */
+  heartbeatMs?: number;
+  /** Disconnect a client once this many bytes are queued for it (see RoomOptions). */
+  maxBufferedBytes?: number;
+  /**
+   * Admission control: refuse new WebSocket connections (503, Retry-After) once this many are open.
+   * Default from the M5 load test: on 1 CPU / 512 MB, 1000 continuously typing editors still had
+   * p99 < 200 ms, and 2000 overloaded the CPU until garbage collection couldn't keep up and the
+   * heap ran out. Refusing extra users keeps the ones already connected working.
+   */
+  maxConnections?: number;
   logger?: boolean;
 }
 
 export async function buildApp(opts: AppOptions) {
   const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 64 * 1024 });
-  const rooms = new RoomManager(opts.store, { persistDebounceMs: opts.persistDebounceMs ?? 1000 });
+  const rooms = new RoomManager(opts.store, {
+    persistDebounceMs: opts.persistDebounceMs ?? 1000,
+    maxBufferedBytes: opts.maxBufferedBytes,
+  });
 
   app.get('/api/health', async () => ({ ok: true, liveRooms: rooms.liveRooms }));
+
+  // Prometheus metrics. Set METRICS_TOKEN to require "Authorization: Bearer <token>" in production.
+  app.get('/metrics', async (req, reply) => {
+    const token = process.env.METRICS_TOKEN;
+    if (token && req.headers.authorization !== `Bearer ${token}`) return reply.code(401).send('unauthorized');
+    reply.header('Content-Type', registry.contentType);
+    return registry.metrics();
+  });
 
   app.post('/api/shaders', async (_req, reply) => {
     const id = newShaderId();
@@ -129,7 +154,27 @@ export async function buildApp(opts: AppOptions) {
 
   // WebSocket endpoint: /collab/<shaderId>. y-websocket clients append the room name to the URL.
   const wss = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
+  const maxConnections = opts.maxConnections ?? Number(process.env.MAX_CONNECTIONS ?? 1000);
+  // Total bytes queued for clients but not yet written to the network, summed when scraped.
+  if (!registry.getSingleMetric('shaderlab_send_buffer_bytes')) {
+    new client.Gauge({
+      name: 'shaderlab_send_buffer_bytes',
+      help: 'Bytes queued for all clients but not yet written to the network',
+      registers: [registry],
+      collect() {
+        let total = 0;
+        for (const ws of wss.clients) total += ws.bufferedAmount;
+        this.set(total);
+      },
+    });
+  }
   app.server.on('upgrade', async (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    if (wss.clients.size >= maxConnections) {
+      metrics.connectionsRejected.inc();
+      socket.write('HTTP/1.1 503 Service Unavailable\r\nRetry-After: 5\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
     const match = /^\/collab\/([^/?]+)/.exec(req.url ?? '');
     const id = match?.[1];
     if (!id || !ID_RE.test(id) || !(await opts.store.exists(id))) {
@@ -138,13 +183,40 @@ export async function buildApp(opts: AppOptions) {
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
+      alive.add(ws);
+      ws.on('pong', () => alive.add(ws));
       void rooms.join(id, ws);
     });
   });
 
-  app.addHook('onClose', async () => {
+  // Heartbeat. A client that vanishes without closing its TCP connection (laptop lid shut, phone
+  // out of signal, a proxy that keeps half-open connections) would otherwise stay "connected"
+  // forever: its cursor never leaves the room, the room never unloads, and memory leaks. Every
+  // interval we ping each client; anyone who didn't answer the previous ping is terminated, which
+  // fires the normal close path (presence removed, room saved and unloaded).
+  const alive = new WeakSet<WebSocket>();
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (!alive.has(ws)) {
+        ws.terminate();
+        continue;
+      }
+      alive.delete(ws);
+      ws.ping();
+    }
+  }, opts.heartbeatMs ?? 30_000);
+  heartbeat.unref();
+
+  // Close WebSockets in preClose, not onClose: app.close() waits for the HTTP server to finish,
+  // which waits for every open connection, upgraded WebSockets included, before onClose runs. A
+  // silent client would make shutdown hang until the platform SIGKILLs us, losing unsaved edits.
+  app.addHook('preClose', async () => {
+    clearInterval(heartbeat);
     for (const client of wss.clients) client.terminate();
-    await rooms.flushAll();
+  });
+
+  app.addHook('onClose', async () => {
+    await rooms.flushAll(); // save anything still in memory
     wss.close();
   });
 

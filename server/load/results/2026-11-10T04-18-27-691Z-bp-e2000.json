@@ -1,0 +1,37 @@
+{
+  "label": "bp-e2000",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 200,
+    "editors": 10,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "bp-e2000",
+    "client": "patched"
+  },
+  "editors": 2000,
+  "latencyMs": {
+    "samples": 18684,
+    "p50": 1160.106201171875,
+    "p95": 2031.311767578125,
+    "p99": 2295.6875,
+    "max": 2466.144775390625
+  },
+  "keystrokesPerSec": 9932,
+  "expectedKeystrokesPerSec": 10000,
+  "probesSent": 19940,
+  "expectedProbeDeliveries": 179460,
+  "connectFailures": 0,
+  "disconnects": 15960,
+  "server": {
+    "cpuPercent": null,
+    "messagesInPerSec": null,
+    "messagesOutPerSec": null,
+    "mbOutPerSec": null,
+    "eventLoopLagP99MsWorst": 1909.456895,
+    "rssMb": null
+  },
+  "loadGeneratorLagP99MsWorst": 2.000895
+}

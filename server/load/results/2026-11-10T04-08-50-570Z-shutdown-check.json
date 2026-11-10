@@ -1,0 +1,37 @@
+{
+  "label": "shutdown-check",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 50,
+    "editors": 10,
+    "keys": 5,
+    "duration": 10,
+    "warmup": 3,
+    "workers": 10,
+    "label": "shutdown-check",
+    "client": "patched"
+  },
+  "editors": 500,
+  "latencyMs": {
+    "samples": 21880,
+    "p50": 355.546630859375,
+    "p95": 1046.059814453125,
+    "p99": 1383.177978515625,
+    "max": 2181.15576171875
+  },
+  "keystrokesPerSec": 2498.5,
+  "expectedKeystrokesPerSec": 2500,
+  "probesSent": 2500,
+  "expectedProbeDeliveries": 22500,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 100.48035000000002,
+    "messagesInPerSec": 5071.6,
+    "messagesOutPerSec": 45644.4,
+    "mbOutPerSec": 2.8474821,
+    "eventLoopLagP99MsWorst": 1157.627903,
+    "rssMb": 111.90272
+  },
+  "loadGeneratorLagP99MsWorst": 1.833983
+}

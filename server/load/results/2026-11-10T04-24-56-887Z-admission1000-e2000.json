@@ -1,0 +1,37 @@
+{
+  "label": "admission1000-e2000",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 200,
+    "editors": 10,
+    "keys": 5,
+    "duration": 30,
+    "warmup": 5,
+    "workers": 10,
+    "label": "admission1000-e2000",
+    "client": "patched"
+  },
+  "editors": 2000,
+  "latencyMs": {
+    "samples": 157073,
+    "p50": 4.397705078125,
+    "p95": 83.87109375,
+    "p99": 142.381591796875,
+    "max": 3347.92626953125
+  },
+  "keystrokesPerSec": 9986.733333333334,
+  "expectedKeystrokesPerSec": 10000,
+  "probesSent": 30000,
+  "expectedProbeDeliveries": 270000,
+  "connectFailures": 990,
+  "disconnects": 6815,
+  "server": {
+    "cpuPercent": 78.6726633333333,
+    "messagesInPerSec": 8388.033333333333,
+    "messagesOutPerSec": 67369.26666666666,
+    "mbOutPerSec": 4.240912466666667,
+    "eventLoopLagP99MsWorst": 44.924927000000004,
+    "rssMb": 158.78144
+  },
+  "loadGeneratorLagP99MsWorst": 2.795519
+}

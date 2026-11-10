@@ -1,0 +1,37 @@
+{
+  "label": "heap-e2000",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 200,
+    "editors": 10,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "heap-e2000",
+    "client": "patched"
+  },
+  "editors": 2000,
+  "latencyMs": {
+    "samples": 88920,
+    "p50": 827.030517578125,
+    "p95": 2560.19189453125,
+    "p99": 3071.579345703125,
+    "max": 3333.146240234375
+  },
+  "keystrokesPerSec": 9800.9,
+  "expectedKeystrokesPerSec": 10000,
+  "probesSent": 19640,
+  "expectedProbeDeliveries": 176760,
+  "connectFailures": 0,
+  "disconnects": 9151,
+  "server": {
+    "cpuPercent": null,
+    "messagesInPerSec": null,
+    "messagesOutPerSec": null,
+    "mbOutPerSec": null,
+    "eventLoopLagP99MsWorst": 1340.080127,
+    "rssMb": null
+  },
+  "loadGeneratorLagP99MsWorst": 2.338815
+}

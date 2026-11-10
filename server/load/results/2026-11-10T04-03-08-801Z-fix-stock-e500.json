@@ -1,0 +1,37 @@
+{
+  "label": "fix-stock-e500",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 50,
+    "editors": 10,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "fix-stock-e500",
+    "client": "stock"
+  },
+  "editors": 500,
+  "latencyMs": {
+    "samples": 44280,
+    "p50": 1348.134033203125,
+    "p95": 5348.060302734375,
+    "p99": 6344.56298828125,
+    "max": 7083.81103515625
+  },
+  "keystrokesPerSec": 2498.45,
+  "expectedKeystrokesPerSec": 2500,
+  "probesSent": 5000,
+  "expectedProbeDeliveries": 45000,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 99.80171999999999,
+    "messagesInPerSec": 27101.8,
+    "messagesOutPerSec": 47879.6,
+    "mbOutPerSec": 2.99446275,
+    "eventLoopLagP99MsWorst": 4219.469822999999,
+    "rssMb": 129.466368
+  },
+  "loadGeneratorLagP99MsWorst": 1.668095
+}

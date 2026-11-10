@@ -15,6 +15,7 @@ import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
 import { cleanTitle, type Store } from './store.js';
+import * as metrics from './metrics.js';
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
@@ -40,7 +41,15 @@ export function initialState(code = DEFAULT_SHADER): Uint8Array {
 
 export interface RoomOptions {
   persistDebounceMs: number;
+  /**
+   * Back-pressure limit: if more than this many bytes are waiting to be sent to one client, that
+   * client can't keep up and is disconnected rather than buffered without bound. Safe because of
+   * the CRDT: when it reconnects, the sync handshake sends exactly what it missed.
+   */
+  maxBufferedBytes?: number;
 }
+
+export const DEFAULT_MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
 
 class Room {
   readonly doc = new Y.Doc();
@@ -56,7 +65,7 @@ class Room {
       const enc = encoding.createEncoder();
       encoding.writeVarUint(enc, MSG_SYNC);
       syncProtocol.writeUpdate(enc, update);
-      this.broadcast(encoding.toUint8Array(enc), origin as WebSocket | null);
+      this.broadcast(encoding.toUint8Array(enc), origin as WebSocket | null, 'sync');
       this.schedulePersist();
     });
     this.awareness.on(
@@ -77,7 +86,8 @@ class Room {
         const enc = encoding.createEncoder();
         encoding.writeVarUint(enc, MSG_AWARENESS);
         encoding.writeVarUint8Array(enc, awarenessProtocol.encodeAwarenessUpdate(this.awareness, changed));
-        this.broadcast(encoding.toUint8Array(enc), null);
+        // Skip the sender: it already has its own state. (Removals on disconnect have no sender.)
+        this.broadcast(encoding.toUint8Array(enc), conn && this.conns.has(conn) ? conn : null, 'awareness');
       },
     );
   }
@@ -107,6 +117,7 @@ class Room {
   handleMessage(conn: WebSocket, data: Uint8Array) {
     const dec = decoding.createDecoder(data);
     const type = decoding.readVarUint(dec);
+    metrics.messagesIn.inc({ type: type === MSG_SYNC ? 'sync' : type === MSG_AWARENESS ? 'awareness' : 'other' });
     if (type === MSG_SYNC) {
       const enc = encoding.createEncoder();
       encoding.writeVarUint(enc, MSG_SYNC);
@@ -125,8 +136,18 @@ class Room {
     if (ids && ids.size > 0) awarenessProtocol.removeAwarenessStates(this.awareness, [...ids], null);
   }
 
-  private broadcast(message: Uint8Array, except: WebSocket | null) {
-    for (const conn of this.conns.keys()) if (conn !== except) send(conn, message);
+  private broadcast(message: Uint8Array, except: WebSocket | null, type: 'sync' | 'awareness') {
+    let n = 0;
+    for (const conn of this.conns.keys()) {
+      if (conn !== except) {
+        send(conn, message, this.opts.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES);
+        n++;
+      }
+    }
+    // Count once per broadcast, not once per recipient, to keep measuring cheap.
+    metrics.broadcasts.inc({ type });
+    metrics.messagesOut.inc(n);
+    metrics.bytesOut.inc(n * message.length);
   }
 
   private schedulePersist() {
@@ -149,7 +170,9 @@ class Room {
     // every save so the gallery can list titles without loading every document. The CRDT is the
     // source of truth; the column is a denormalized copy, cleaned (trimmed, length-capped) here.
     const title = cleanTitle(this.doc.getMap('meta').get('title'));
+    const end = metrics.persistSeconds.startTimer();
     await this.store.saveState(this.id, Y.encodeStateAsUpdate(this.doc), title);
+    end();
   }
 
   destroyed = false;
@@ -161,11 +184,47 @@ class Room {
   }
 }
 
-function send(conn: WebSocket, message: Uint8Array) {
+// Write coalescing. Profiling under load showed ~80% of busy CPU in the writev() system call: every
+// ws.send() was its own socket write. When busy, Node handles many incoming messages in one
+// event-loop turn, and each produces sends to the same sockets. So we cork a socket on its first send
+// in a turn and uncork it in setImmediate (the end of the same turn): everything queued for that
+// socket goes out in one writev. No timer, no added delay: a quiet room sends exactly as before,
+// and batching grows automatically with load. (ws has no public cork API; _socket is its net.Socket.)
+const corked = new Set<WebSocket>();
+let flushScheduled = false;
+
+function flushCorked() {
+  flushScheduled = false;
+  for (const conn of corked) socketOf(conn)?.uncork();
+  corked.clear();
+}
+
+function socketOf(conn: WebSocket): { cork(): void; uncork(): void } | undefined {
+  return (conn as unknown as { _socket?: { cork(): void; uncork(): void } })._socket;
+}
+
+function send(conn: WebSocket, message: Uint8Array, maxBuffered = DEFAULT_MAX_BUFFERED_BYTES) {
   if (conn.readyState !== conn.OPEN) return;
-  conn.send(message, (err) => {
-    if (err) conn.close();
-  });
+  // Back-pressure. Without this, a server that produces messages faster than a client (or the
+  // network) takes them keeps queueing in memory; the load test at 2000 editors grew the heap
+  // until V8 crashed with "JavaScript heap out of memory", disconnecting everyone. Dropping the one
+  // slow client keeps the process (and every other user) alive.
+  if (conn.bufferedAmount > maxBuffered) {
+    metrics.slowClientsDropped.inc();
+    conn.terminate();
+    return;
+  }
+  if (!corked.has(conn)) {
+    socketOf(conn)?.cork();
+    corked.add(conn);
+    if (!flushScheduled) {
+      flushScheduled = true;
+      setImmediate(flushCorked);
+    }
+  }
+  // No per-message callback: it allocated a write request for every send. Failures surface as the
+  // socket's 'error'/'close' events, which the connection handler already deals with.
+  conn.send(message);
 }
 
 /** Owns all live rooms; loads them on first connection and unloads them when the last user leaves. */
@@ -185,6 +244,8 @@ export class RoomManager {
     const queued: Uint8Array[] = [];
     let room: Room | null = null;
     let closed = false;
+    metrics.connections.inc();
+    conn.on('error', () => conn.terminate()); // an unhandled 'error' event would crash the process
     conn.on('message', (data: Buffer) => {
       const msg = new Uint8Array(data);
       if (!room) return void queued.push(msg);
@@ -192,6 +253,7 @@ export class RoomManager {
     });
     conn.on('close', () => {
       closed = true;
+      metrics.connections.dec();
       if (!room) return;
       room.removeConnection(conn);
       if (room.conns.size === 0) void this.unload(id, room);
@@ -206,6 +268,7 @@ export class RoomManager {
         return r;
       })();
       this.rooms.set(id, pending);
+      metrics.liveRooms.set(this.rooms.size);
     }
     const loaded = await pending;
     if (closed) {
@@ -230,6 +293,7 @@ export class RoomManager {
     // Someone may have joined while we were saving.
     if (room.conns.size === 0 && (await this.rooms.get(id)) === room) {
       this.rooms.delete(id);
+      metrics.liveRooms.set(this.rooms.size);
       room.destroy();
     }
   }

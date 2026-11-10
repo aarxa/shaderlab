@@ -1,0 +1,37 @@
+{
+  "label": "bp-e1500",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 150,
+    "editors": 10,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "bp-e1500",
+    "client": "patched"
+  },
+  "editors": 1500,
+  "latencyMs": {
+    "samples": 134348,
+    "p50": 237.48779296875,
+    "p95": 559.0146484375,
+    "p99": 789.89599609375,
+    "max": 968.16845703125
+  },
+  "keystrokesPerSec": 7459.8,
+  "expectedKeystrokesPerSec": 7500,
+  "probesSent": 15000,
+  "expectedProbeDeliveries": 135000,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 107.81551499999998,
+    "messagesInPerSec": 16756.2,
+    "messagesOutPerSec": 150805.35,
+    "mbOutPerSec": 9.41816385,
+    "eventLoopLagP99MsWorst": 697.8273270000001,
+    "rssMb": 228.712448
+  },
+  "loadGeneratorLagP99MsWorst": 5.414911
+}

@@ -1,0 +1,37 @@
+{
+  "label": "fix-patched-e250",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 25,
+    "editors": 10,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "fix-patched-e250",
+    "client": "patched"
+  },
+  "editors": 250,
+  "latencyMs": {
+    "samples": 22500,
+    "p50": 0.78662109375,
+    "p95": 2.753662109375,
+    "p99": 5.496826171875,
+    "max": 22.428955078125
+  },
+  "keystrokesPerSec": 1249.15,
+  "expectedKeystrokesPerSec": 1250,
+  "probesSent": 2500,
+  "expectedProbeDeliveries": 22500,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 43.204315000000015,
+    "messagesInPerSec": 2629.1,
+    "messagesOutPerSec": 23661.5,
+    "mbOutPerSec": 1.4811811000000001,
+    "eventLoopLagP99MsWorst": 5.562367,
+    "rssMb": 128.147456
+  },
+  "loadGeneratorLagP99MsWorst": 1.860607
+}

@@ -135,6 +135,24 @@ describe('collaboration', () => {
     expect(rooms.liveRooms).toBe(0);
   });
 
+  it("does not send a user's own cursor update back to them", async () => {
+    const id = await createShader();
+    const a = connect(id);
+    const b = connect(id);
+    await Promise.all([a.synced, b.synced]);
+    await new Promise((r) => setTimeout(r, 100)); // let the initial presence exchange settle
+    let awarenessToA = 0;
+    const ws = (a.provider as unknown as { ws: WebSocket }).ws;
+    ws.addEventListener('message', (ev: { data: unknown }) => {
+      const bytes = new Uint8Array(ev.data as ArrayBuffer);
+      if (bytes[0] === 1) awarenessToA++; // message type 1 = awareness
+    });
+    a.provider.awareness.setLocalStateField('cursor', { anchor: 3, head: 3 });
+    await until(() => (b.provider.awareness.getStates().get(a.doc.clientID) as { cursor?: unknown } | undefined)?.cursor !== undefined);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(awarenessToA).toBe(0);
+  });
+
   it('rejects unknown shader ids', async () => {
     const ws = new WebSocket(`ws://${base}/collab/ZZZZZZZZZZ`);
     const status = await new Promise<number>((resolve) => {

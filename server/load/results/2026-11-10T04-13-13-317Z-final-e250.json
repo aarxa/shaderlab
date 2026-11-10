@@ -1,0 +1,37 @@
+{
+  "label": "final-e250",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 25,
+    "editors": 10,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "final-e250",
+    "client": "patched"
+  },
+  "editors": 250,
+  "latencyMs": {
+    "samples": 22500,
+    "p50": 0.5791015625,
+    "p95": 1.37744140625,
+    "p99": 2.2548828125,
+    "max": 4.149658203125
+  },
+  "keystrokesPerSec": 1249.3,
+  "expectedKeystrokesPerSec": 1250,
+  "probesSent": 2500,
+  "expectedProbeDeliveries": 22500,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 24.437734999999993,
+    "messagesInPerSec": 2628.35,
+    "messagesOutPerSec": 23655.15,
+    "mbOutPerSec": 1.48164705,
+    "eventLoopLagP99MsWorst": 2.578431,
+    "rssMb": 108.42112
+  },
+  "loadGeneratorLagP99MsWorst": 1.810431
+}
