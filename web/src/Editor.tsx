@@ -12,6 +12,7 @@ import { setDiagnostics, type Diagnostic } from '@codemirror/lint';
 
 import { ShaderRenderer, type CompileError } from './renderer';
 import { getIdentity } from './identity';
+import { sendOnlyLocalAwareness } from './awareness';
 
 type Status = 'connecting' | 'connected' | 'disconnected';
 interface Peer {
@@ -61,6 +62,7 @@ export function Editor() {
     meta.observe(syncTitle);
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const provider = new WebsocketProvider(`${proto}://${location.host}/collab`, id, doc);
+    sendOnlyLocalAwareness(provider); // don't echo other people's cursors back to the server
     const me = getIdentity();
     provider.awareness.setLocalStateField('user', { name: me.name, color: me.color, colorLight: me.color + '33' });
 

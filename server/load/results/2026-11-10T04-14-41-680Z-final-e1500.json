@@ -1,0 +1,37 @@
+{
+  "label": "final-e1500",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 150,
+    "editors": 10,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "final-e1500",
+    "client": "patched"
+  },
+  "editors": 1500,
+  "latencyMs": {
+    "samples": 133712,
+    "p50": 276.688720703125,
+    "p95": 633.498046875,
+    "p99": 846.501708984375,
+    "max": 1205.97705078125
+  },
+  "keystrokesPerSec": 7424.95,
+  "expectedKeystrokesPerSec": 7500,
+  "probesSent": 14872,
+  "expectedProbeDeliveries": 133848,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 100.061705,
+    "messagesInPerSec": 15546.2,
+    "messagesOutPerSec": 139915.35,
+    "mbOutPerSec": 8.75615265,
+    "eventLoopLagP99MsWorst": 731.381759,
+    "rssMb": 231.948288
+  },
+  "loadGeneratorLagP99MsWorst": 5.427199
+}

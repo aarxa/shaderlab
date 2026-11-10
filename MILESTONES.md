@@ -32,7 +32,8 @@ prepares you for. Ask Claude to review your PR or explain anything, but write th
 - Interview prep: sticky sessions vs. pub/sub fan-out, why CRDT updates are safe to apply twice
   (idempotence), back-pressure, what happens when Redis is down.
 
-## M5. Load test and observability (measure it)
+## M5. Load test and observability (done)
+- Results in the README; every finding explained in docs/M5_EXPLAINED.md.
 - Write a load generator (Node script or k6): N simulated editors per room typing at human speed.
 - Measure end-to-end latency (edit on client A → visible on client B): p50/p95/p99 at 10, 100, 500
   concurrent editors. Find the bottleneck (CPU on broadcast? Postgres writes?) and fix one.

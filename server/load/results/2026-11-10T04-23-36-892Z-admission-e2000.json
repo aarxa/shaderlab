@@ -1,0 +1,37 @@
+{
+  "label": "admission-e2000",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 200,
+    "editors": 10,
+    "keys": 5,
+    "duration": 30,
+    "warmup": 5,
+    "workers": 10,
+    "label": "admission-e2000",
+    "client": "patched"
+  },
+  "editors": 2000,
+  "latencyMs": {
+    "samples": 125850,
+    "p50": 37.790283203125,
+    "p95": 215.37109375,
+    "p99": 353.767578125,
+    "max": 486.388671875
+  },
+  "keystrokesPerSec": 9988.4,
+  "expectedKeystrokesPerSec": 10000,
+  "probesSent": 30000,
+  "expectedProbeDeliveries": 270000,
+  "connectFailures": 799,
+  "disconnects": 7087,
+  "server": {
+    "cpuPercent": 48.53277333333333,
+    "messagesInPerSec": 6063.633333333333,
+    "messagesOutPerSec": 44552.833333333336,
+    "mbOutPerSec": 2.7878293,
+    "eventLoopLagP99MsWorst": 75.62854300000001,
+    "rssMb": 147.283968
+  },
+  "loadGeneratorLagP99MsWorst": 4.018175
+}

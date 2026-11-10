@@ -13,6 +13,12 @@ services:
         fromDatabase:
           name: shaderlab-db
           property: connectionString
+      # The free plan gets a fraction of one CPU; one full core handled ~1,000 editors (docs/M5_EXPLAINED.md).
+      - key: MAX_CONNECTIONS
+        value: "100"
+      # Protects GET /metrics; Render generates a random value (visible in the dashboard).
+      - key: METRICS_TOKEN
+        generateValue: true
 
 databases:
   - name: shaderlab-db

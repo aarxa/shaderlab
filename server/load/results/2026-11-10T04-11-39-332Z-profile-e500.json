@@ -1,0 +1,37 @@
+{
+  "label": "profile-e500",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 50,
+    "editors": 10,
+    "keys": 5,
+    "duration": 15,
+    "warmup": 5,
+    "workers": 10,
+    "label": "profile-e500",
+    "client": "patched"
+  },
+  "editors": 500,
+  "latencyMs": {
+    "samples": 34047,
+    "p50": 110.503173828125,
+    "p95": 1002.674072265625,
+    "p99": 1348.914794921875,
+    "max": 2287.611572265625
+  },
+  "keystrokesPerSec": 2499.4666666666667,
+  "expectedKeystrokesPerSec": 2500,
+  "probesSent": 3750,
+  "expectedProbeDeliveries": 33750,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 81.88981333333332,
+    "messagesInPerSec": 5200.133333333333,
+    "messagesOutPerSec": 46917.86666666667,
+    "mbOutPerSec": 2.9268537333333335,
+    "eventLoopLagP99MsWorst": 1078.9847029999999,
+    "rssMb": 126.930944
+  },
+  "loadGeneratorLagP99MsWorst": 1.894399
+}

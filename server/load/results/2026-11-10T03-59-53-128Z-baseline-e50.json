@@ -1,0 +1,36 @@
+{
+  "label": "baseline-e50",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 10,
+    "editors": 5,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "baseline-e50"
+  },
+  "editors": 50,
+  "latencyMs": {
+    "samples": 4000,
+    "p50": 0.87744140625,
+    "p95": 2.314208984375,
+    "p99": 3.409912109375,
+    "max": 5.54638671875
+  },
+  "keystrokesPerSec": 249.85,
+  "expectedKeystrokesPerSec": 250,
+  "probesSent": 1000,
+  "expectedProbeDeliveries": 4000,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 23.601455,
+    "messagesInPerSec": 1551.85,
+    "messagesOutPerSec": 2452.75,
+    "mbOutPerSec": 0.16172104999999998,
+    "eventLoopLagP99MsWorst": 3.5287029999999997,
+    "rssMb": 92.004352
+  },
+  "loadGeneratorLagP99MsWorst": 1.558527
+}

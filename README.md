@@ -9,7 +9,33 @@ a minute to wake the server).
 
 Measured on the live deployment (Render, Oregon; client in San Jose): an edit typed by one user shows
 up for another in **42 ms at p50, 114 ms at p95** over `wss://` (30 edits, one network round trip
-through the server). Load testing with many concurrent editors is milestone M5.
+through the server).
+
+## Performance (load tested)
+Simulated editors (real `y-websocket` clients, rooms of 10, each typing 5 keys/s and moving its cursor)
+against the production image limited to **1 CPU and 512 MB**, with Postgres. Latency is edit on one
+client → received by the others. Walkthrough of every finding: [docs/M5_EXPLAINED.md](docs/M5_EXPLAINED.md).
+
+| Concurrent editors | Before | After |
+|---:|---|---|
+| 250 | p99 31 ms, CPU 70% | **p99 2.3 ms**, CPU 24% |
+| 500 | p99 3,294 ms (event loop 2.4 s behind) | **p99 20 ms**, CPU 50% |
+| 1,000 | p99 3,746 ms, 178 connections failed | **p99 168 ms**, CPU 88% |
+| 2,000 offered | out-of-memory crash | 1,000 admitted at **p99 142 ms**, rest get `503 Retry-After` |
+
+What changed, each found by measuring:
+- **Cursor echo:** the stock y-websocket client re-sent every presence update it received, 11 inbound
+  messages per keystroke (growing with N² per room). The client now sends only its own state: 2 per keystroke.
+- **Write coalescing:** a CPU profile showed ~80% of busy time in `writev` and 1% in Yjs. Sockets are now
+  corked per event-loop turn, so each gets one system call per batch instead of one per message.
+- **Admission control:** past capacity the server refuses new connections quickly instead of slowing everyone
+  down until it runs out of memory (`MAX_CONNECTIONS`).
+- **Connection lifecycle:** ping/pong heartbeat drops half-open connections, which used to hang shutdown until
+  SIGKILL (losing the last second of edits). Slow readers are cut off at 4 MB of queued data.
+
+Prometheus metrics at `GET /metrics` (connections, rooms, messages, bytes, persist time, event-loop lag).
+Reproduce: `docker compose -f docker-compose.yml -f docker-compose.load.yml up -d --build`, then
+`cd server && npm run load -- --rooms 100 --editors 10`.
 
 ## Features
 - **Live preview**: WebGL2, Shadertoy-style `mainImage(out vec4, in vec2)` with `iTime`, `iResolution`,
@@ -60,7 +86,9 @@ TEST_DATABASE_URL=postgres://shaderlab:shaderlab@localhost:5433/shaderlab npm te
 ```
 The collaboration tests drive real `y-websocket` clients against a real server: two-client sync,
 concurrent edits converging, persistence after everyone leaves, presence cleanup on disconnect, and two
-race conditions (messages arriving during a slow room load, and disconnecting mid-load). CI runs
+race conditions (messages arriving during a slow room load, and disconnecting mid-load). Lifecycle tests
+cover the heartbeat, shutdown with a silent client, saving unsaved edits on shutdown, back-pressure, and
+admission control. CI runs
 typecheck, tests against a Postgres service container, and the production build.
 
 ## Roadmap

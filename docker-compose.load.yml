@@ -1,0 +1,6 @@
+# Load-test setup: the production image, limited to 1 CPU and 512 MB like a small cloud instance.
+#   docker compose -f docker-compose.yml -f docker-compose.load.yml up -d --build app
+services:
+  app:
+    cpus: 1.0
+    mem_limit: 512m

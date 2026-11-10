@@ -1,0 +1,37 @@
+{
+  "label": "fix-patched-e1000",
+  "config": {
+    "base": "http://localhost:8787",
+    "rooms": 100,
+    "editors": 10,
+    "keys": 5,
+    "duration": 20,
+    "warmup": 5,
+    "workers": 10,
+    "label": "fix-patched-e1000",
+    "client": "patched"
+  },
+  "editors": 1000,
+  "latencyMs": {
+    "samples": 100638,
+    "p50": 215.1533203125,
+    "p95": 3887.757568359375,
+    "p99": 4913.147705078125,
+    "max": 5389.602294921875
+  },
+  "keystrokesPerSec": 4994.95,
+  "expectedKeystrokesPerSec": 5000,
+  "probesSent": 10000,
+  "expectedProbeDeliveries": 90000,
+  "connectFailures": 0,
+  "disconnects": 0,
+  "server": {
+    "cpuPercent": 74.356765,
+    "messagesInPerSec": 8008.7,
+    "messagesOutPerSec": 72213.65,
+    "mbOutPerSec": 4.50720285,
+    "eventLoopLagP99MsWorst": 1078.9847029999999,
+    "rssMb": 159.817728
+  },
+  "loadGeneratorLagP99MsWorst": 2.306047
+}
