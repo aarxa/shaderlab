@@ -14,7 +14,7 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 
-import type { Store } from './store.js';
+import { cleanTitle, type Store } from './store.js';
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
@@ -145,10 +145,17 @@ class Room {
     }
     if (!this.dirty) return;
     this.dirty = false;
-    await this.store.saveState(this.id, Y.encodeStateAsUpdate(this.doc));
+    // The title lives in the CRDT (so it syncs live like the code). We also copy it into a column on
+    // every save so the gallery can list titles without loading every document. The CRDT is the
+    // source of truth; the column is a denormalized copy, cleaned (trimmed, length-capped) here.
+    const title = cleanTitle(this.doc.getMap('meta').get('title'));
+    await this.store.saveState(this.id, Y.encodeStateAsUpdate(this.doc), title);
   }
 
+  destroyed = false;
+
   destroy() {
+    this.destroyed = true;
     this.awareness.destroy();
     this.doc.destroy();
   }
@@ -225,6 +232,19 @@ export class RoomManager {
       this.rooms.delete(id);
       room.destroy();
     }
+  }
+
+  /**
+   * The current in-memory state of a loaded room, including edits not saved yet (saves are
+   * debounced), or null if nobody has the shader open. Forking uses this so it never drops the
+   * newest edits.
+   */
+  async snapshot(id: string): Promise<{ state: Uint8Array; title: string } | null> {
+    const pending = this.rooms.get(id);
+    if (!pending) return null;
+    const room = await pending;
+    if (room.destroyed) return null; // unloaded meanwhile; it was saved first, so the store is current
+    return { state: Y.encodeStateAsUpdate(room.doc), title: cleanTitle(room.doc.getMap('meta').get('title')) };
   }
 
   async flushAll() {

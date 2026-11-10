@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
 import { Editor } from './Editor';
+import { Gallery } from './Gallery';
 import './styles.css';
 
 // "/" creates a fresh shader and redirects to its share link. The request is shared module-wide
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<NewShader />} />
         <Route path="/s/:id" element={<Editor />} />
+        <Route path="/gallery" element={<Gallery />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
