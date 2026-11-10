@@ -40,6 +40,7 @@ prepares you for. Ask Claude to review your PR or explain anything, but write th
 - Done when: a results table in the README ("500 concurrent editors across 50 rooms, p95 X ms").
 - Interview prep: this is your best resume bullet; know every number and why it is what it is.
 
-## M6. Deploy
-- Deploy to Fly.io or Render with managed Postgres; HTTPS + `wss://`; GitHub Actions deploys on merge.
-- Done when: a public URL on your resume and portfolio.
+## M6. Deploy (done)
+- Live on Render from `render.yaml` (Docker web service + managed Postgres), auto-deploys on push to main.
+- Render's free Postgres expires 30 days after creation (around 2026-12-09): move `DATABASE_URL` to
+  Neon's free tier or a paid Render database before then.
