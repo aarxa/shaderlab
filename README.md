@@ -4,6 +4,13 @@ A collaborative GLSL shader playground. Open a link, write a fragment shader, se
 and share the link: everyone on it edits the same code at the same time, Google-Docs style, with
 each person's cursor and name visible.
 
+**Live: https://shaderlab.onrender.com** (free tier: the first visit after ~15 idle minutes takes up to
+a minute to wake the server).
+
+Measured on the live deployment (Render, Oregon; client in San Jose): an edit typed by one user shows
+up for another in **42 ms at p50, 114 ms at p95** over `wss://` (30 edits, one network round trip
+through the server). Load testing with many concurrent editors is milestone M5.
+
 ## Features
 - **Live preview**: WebGL2, Shadertoy-style `mainImage(out vec4, in vec2)` with `iTime`, `iResolution`,
   `iMouse`. Recompiles 250 ms after you stop typing; on a compile error the last working version keeps
