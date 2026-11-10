@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: shaderlab
+      POSTGRES_PASSWORD: shaderlab
+      POSTGRES_DB: shaderlab
+    ports: ["5433:5432"]  # 5433 on the host, so it does not clash with a local Postgres
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shaderlab"]
+      interval: 2s
+      retries: 20
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://shaderlab:shaderlab@db:5432/shaderlab
+      PORT: "8787"
+    ports: ["8787:8787"]
+    depends_on:
+      db: { condition: service_healthy }
+volumes:
+  pgdata:

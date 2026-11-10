@@ -1,0 +1,33 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --text: #e6e6e6;
+  --muted: #8b93a1;
+  --accent: #7c5cff;
+  --error: #ff6b6b;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, sans-serif; }
+a { color: var(--accent); }
+.center { display: grid; place-items: center; height: 100%; color: var(--muted); }
+.page { display: flex; flex-direction: column; height: 100%; }
+header { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid #262a33; }
+.brand { font-weight: 700; color: var(--text); text-decoration: none; letter-spacing: 0.3px; }
+.status { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #333; color: var(--muted); }
+.status.connected { background: #12391f; color: #5ee08a; }
+.status.disconnected { background: #3d1515; color: var(--error); }
+.peers { display: flex; gap: 4px; margin-left: auto; }
+.peer { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #111; }
+button { background: var(--accent); color: white; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
+main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+.editor { min-height: 0; overflow: hidden; border-right: 1px solid #262a33; }
+.preview { position: relative; min-height: 0; }
+.preview canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+.errors { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; max-height: 40%; overflow: auto; padding: 8px 12px; background: rgba(40, 10, 10, 0.9); color: var(--error); font: 12px ui-monospace, Menlo, monospace; }
+@media (max-width: 800px) {
+  main { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .editor { border-right: 0; border-bottom: 1px solid #262a33; }
+  header { padding: 8px 16px; flex-wrap: wrap; }
+}
