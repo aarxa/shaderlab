@@ -8,6 +8,15 @@ interface Item {
   forkedFrom: string | null;
   createdAt: string;
   updatedAt: string;
+  thumbnailAt: string | null;
+}
+
+/** A stable two-color gradient per shader for cards that don't have a thumbnail yet. */
+function placeholder(id: string): string {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const a = h % 360, b = (a + 60 + (h >> 9) % 120) % 360;
+  return `linear-gradient(135deg, hsl(${a} 55% 30%), hsl(${b} 55% 18%))`;
 }
 
 const PAGE = 24;
@@ -66,6 +75,21 @@ export function Gallery() {
       <div className="gallery">
         {items.map((it) => (
           <Link key={it.id} to={`/s/${it.id}`} className="card">
+            <div className="thumb" style={{ background: placeholder(it.id) }}>
+              {it.thumbnailAt && (
+                // ?v= is the thumbnail's version: the URL changes when the image does, so the server
+                // can let the browser cache each version forever.
+                <img
+                  src={`/api/shaders/${it.id}/thumbnail?v=${new Date(it.thumbnailAt).getTime()}`}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  width={320}
+                  height={180}
+                  onError={(e) => (e.currentTarget.style.display = 'none')}
+                />
+              )}
+            </div>
             <div className="card-title">{it.title}</div>
             <div className="card-meta">
               {ago(it.createdAt)}

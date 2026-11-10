@@ -35,14 +35,21 @@ export function Editor() {
   const [errors, setErrors] = useState<CompileError[]>([]);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [notFound, setNotFound] = useState(false);
+  // Set by the main effect; the metadata fetch calls it if this shader has no thumbnail yet.
+  const backfillThumbnail = useRef<(() => void) | null>(null);
+  const thumbnailMissing = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/shaders/${id}`).then(async (r) => {
       if (cancelled) return;
       if (r.status !== 200) return setNotFound(true);
-      const meta = (await r.json()) as { forkedFrom: string | null };
+      const meta = (await r.json()) as { forkedFrom: string | null; thumbnailAt: string | null };
       setForkedFrom(meta.forkedFrom);
+      if (meta.thumbnailAt === null) {
+        thumbnailMissing.current = true;
+        backfillThumbnail.current?.();
+      }
     });
     return () => {
       cancelled = true;
@@ -79,12 +86,54 @@ export function Editor() {
 
     const renderer = new ShaderRenderer(canvasEl.current);
     renderer.startLoop();
+
+    // Thumbnails: whoever is typing takes the picture. Several people may have the shader open; only
+    // a client that made a local edit since its last upload captures (plus one backfill for shaders
+    // that have no thumbnail yet), so watchers don't all upload the same image.
+    let editSeq = 0; // local edits so far
+    let capturedSeq = 0; // editSeq at the last successful upload
+    let compiledOk = false;
+    let captureTimer = 0;
+    let lastUpload = 0;
+    const THUMB_DELAY_MS = 3000; // let the code settle (and the animation run) before capturing
+    const THUMB_MIN_GAP_MS = 15_000; // the server also limits writes per shader
+    const markEdit = (e: Y.YTextEvent) => {
+      if (e.transaction.local) editSeq++; // remote edits arrive with local = false
+    };
+    ytext.observe(markEdit);
+    const scheduleCapture = (delay = THUMB_DELAY_MS) => {
+      window.clearTimeout(captureTimer);
+      captureTimer = window.setTimeout(capture, Math.max(delay, lastUpload + THUMB_MIN_GAP_MS - Date.now()));
+    };
+    const capture = async () => {
+      if (!compiledOk || (editSeq === capturedSeq && !thumbnailMissing.current)) return;
+      const seq = editSeq;
+      const blob = await renderer.capture();
+      if (!blob) return;
+      const res = await fetch(`/api/shaders/${id}/thumbnail`, {
+        method: 'PUT',
+        headers: { 'Content-Type': blob.type },
+        body: blob,
+      }).catch(() => null);
+      if (res?.status === 204) {
+        capturedSeq = seq;
+        thumbnailMissing.current = false;
+        lastUpload = Date.now();
+      } else if (res?.status === 429) {
+        // Someone else just uploaded one; try again once the server's window has passed.
+        scheduleCapture(Number(res.headers.get('Retry-After') ?? 10) * 1000);
+      }
+    };
+    backfillThumbnail.current = () => scheduleCapture();
+
     let compileTimer = 0;
     const recompile = () => {
       window.clearTimeout(compileTimer);
       compileTimer = window.setTimeout(() => {
         const errs = renderer.setCode(ytext.toString());
         setErrors(errs);
+        compiledOk = errs.length === 0; // never photograph the previous version during an error
+        if (compiledOk && (editSeq !== capturedSeq || thumbnailMissing.current)) scheduleCapture();
         // Compile errors become inline diagnostics (red underline + hover message) on their lines.
         const diagnostics: Diagnostic[] = errs.map((e) => {
           const line = view.state.doc.line(Math.min(e.line, view.state.doc.lines));
@@ -111,6 +160,9 @@ export function Editor() {
 
     return () => {
       window.clearTimeout(compileTimer);
+      window.clearTimeout(captureTimer);
+      backfillThumbnail.current = null;
+      ytext.unobserve(markEdit);
       ytext.unobserve(recompile);
       meta.unobserve(syncTitle);
       metaRef.current = null;

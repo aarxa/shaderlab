@@ -10,6 +10,14 @@ export interface ShaderMeta {
   forkedFrom: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /** When the thumbnail was last replaced, or null if there is none yet. */
+  thumbnailAt: Date | null;
+}
+
+export interface Thumbnail {
+  image: Uint8Array;
+  contentType: string;
+  updatedAt: Date;
 }
 
 export interface CreateOptions {
@@ -41,6 +49,11 @@ export interface Store {
   meta(id: string): Promise<ShaderMeta | null>;
   /** Newest first, starting after `after` (exclusive). */
   list(limit: number, after?: PageKey | null): Promise<Page>;
+  /** Insert or replace. Returns false if the shader doesn't exist. */
+  saveThumbnail(id: string, image: Uint8Array, contentType: string): Promise<boolean>;
+  loadThumbnail(id: string): Promise<Thumbnail | null>;
+  /** Fork support: give `to` a copy of `from`'s thumbnail, if it has one. */
+  copyThumbnail(from: string, to: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -63,7 +76,9 @@ interface MemRow {
 
 export class MemoryStore implements Store {
   private rows = new Map<string, MemRow>();
+  private thumbs = new Map<string, Thumbnail>();
   private seq = 0;
+  private withThumb = (m: ShaderMeta): ShaderMeta => ({ ...m, thumbnailAt: this.thumbs.get(m.id)?.updatedAt ?? null });
 
   async create(id: string, initialState: Uint8Array, opts: CreateOptions = {}) {
     const now = new Date();
@@ -71,7 +86,7 @@ export class MemoryStore implements Store {
     this.rows.set(id, {
       state: initialState,
       key,
-      meta: { id, title: cleanTitle(opts.title), forkedFrom: opts.forkedFrom ?? null, createdAt: now, updatedAt: now },
+      meta: { id, title: cleanTitle(opts.title), forkedFrom: opts.forkedFrom ?? null, createdAt: now, updatedAt: now, thumbnailAt: null },
     });
   }
   async exists(id: string) {
@@ -88,7 +103,7 @@ export class MemoryStore implements Store {
   }
   async meta(id: string) {
     const row = this.rows.get(id);
-    return row ? { ...row.meta } : null;
+    return row ? this.withThumb(row.meta) : null;
   }
   async list(limit: number, after: PageKey | null = null): Promise<Page> {
     const before = (r: MemRow, k: PageKey) => r.key < k.t || (r.key === k.t && r.meta.id < k.id);
@@ -98,9 +113,23 @@ export class MemoryStore implements Store {
     const page = sorted.slice(0, limit);
     const last = page[page.length - 1];
     return {
-      items: page.map((r) => ({ ...r.meta })),
+      items: page.map((r) => this.withThumb(r.meta)),
       next: sorted.length > limit && last ? { t: last.key, id: last.meta.id } : null,
     };
+  }
+  async saveThumbnail(id: string, image: Uint8Array, contentType: string) {
+    if (!this.rows.has(id)) return false;
+    const prev = this.thumbs.get(id)?.updatedAt.getTime() ?? 0;
+    // Strictly increasing, so the gallery's ?v= cache key always changes when the image does.
+    this.thumbs.set(id, { image, contentType, updatedAt: new Date(Math.max(Date.now(), prev + 1)) });
+    return true;
+  }
+  async loadThumbnail(id: string) {
+    return this.thumbs.get(id) ?? null;
+  }
+  async copyThumbnail(from: string, to: string) {
+    const t = this.thumbs.get(from);
+    if (t && this.rows.has(to)) this.thumbs.set(to, { ...t, updatedAt: new Date() });
   }
   async close() {}
 }
@@ -112,14 +141,19 @@ interface PgRow {
   created_at: Date;
   updated_at: Date;
   created_key: string;
+  thumbnail_at: Date | null;
 }
-const META_COLUMNS = 'id, title, forked_from, created_at, updated_at, created_at::text AS created_key';
+// LEFT JOIN on the thumbnails primary key: one index lookup per row, and the image bytes are not read.
+const META_COLUMNS =
+  's.id, s.title, s.forked_from, s.created_at, s.updated_at, s.created_at::text AS created_key, t.updated_at AS thumbnail_at';
+const META_FROM = 'shaders s LEFT JOIN thumbnails t ON t.shader_id = s.id';
 const toMeta = (r: PgRow): ShaderMeta => ({
   id: r.id,
   title: r.title,
   forkedFrom: r.forked_from,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
+  thumbnailAt: r.thumbnail_at,
 });
 
 export class PgStore implements Store {
@@ -155,7 +189,7 @@ export class PgStore implements Store {
     ]);
   }
   async meta(id: string) {
-    const r = await this.pool.query<PgRow>(`SELECT ${META_COLUMNS} FROM shaders WHERE id = $1`, [id]);
+    const r = await this.pool.query<PgRow>(`SELECT ${META_COLUMNS} FROM ${META_FROM} WHERE s.id = $1`, [id]);
     return r.rows[0] ? toMeta(r.rows[0]) : null;
   }
   async list(limit: number, after: PageKey | null = null): Promise<Page> {
@@ -165,12 +199,12 @@ export class PgStore implements Store {
     // ORDER BY created_at DESC, id DESC, and the composite index serves it directly.
     const r = after
       ? await this.pool.query<PgRow>(
-          `SELECT ${META_COLUMNS} FROM shaders WHERE (created_at, id) < ($1::timestamptz, $2)
-           ORDER BY created_at DESC, id DESC LIMIT $3`,
+          `SELECT ${META_COLUMNS} FROM ${META_FROM} WHERE (s.created_at, s.id) < ($1::timestamptz, $2)
+           ORDER BY s.created_at DESC, s.id DESC LIMIT $3`,
           [after.t, after.id, limit + 1],
         )
       : await this.pool.query<PgRow>(
-          `SELECT ${META_COLUMNS} FROM shaders ORDER BY created_at DESC, id DESC LIMIT $1`,
+          `SELECT ${META_COLUMNS} FROM ${META_FROM} ORDER BY s.created_at DESC, s.id DESC LIMIT $1`,
           [limit + 1],
         );
     const rows = r.rows.slice(0, limit);
@@ -179,6 +213,34 @@ export class PgStore implements Store {
       items: rows.map(toMeta),
       next: r.rows.length > limit && last ? { t: last.created_key, id: last.id } : null,
     };
+  }
+  async saveThumbnail(id: string, image: Uint8Array, contentType: string) {
+    // INSERT ... SELECT FROM shaders: inserts nothing (rowCount 0) if the shader doesn't exist,
+    // instead of raising a foreign-key error. GREATEST keeps updated_at strictly increasing.
+    const r = await this.pool.query(
+      `INSERT INTO thumbnails (shader_id, image, content_type)
+       SELECT id, $2, $3 FROM shaders WHERE id = $1
+       ON CONFLICT (shader_id) DO UPDATE SET image = EXCLUDED.image, content_type = EXCLUDED.content_type,
+         updated_at = GREATEST(now(), thumbnails.updated_at + interval '1 millisecond')`,
+      [id, Buffer.from(image), contentType],
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
+  async loadThumbnail(id: string) {
+    const r = await this.pool.query<{ image: Buffer; content_type: string; updated_at: Date }>(
+      'SELECT image, content_type, updated_at FROM thumbnails WHERE shader_id = $1',
+      [id],
+    );
+    const row = r.rows[0];
+    return row ? { image: new Uint8Array(row.image), contentType: row.content_type, updatedAt: row.updated_at } : null;
+  }
+  async copyThumbnail(from: string, to: string) {
+    await this.pool.query(
+      `INSERT INTO thumbnails (shader_id, image, content_type)
+       SELECT $2, image, content_type FROM thumbnails WHERE shader_id = $1
+       ON CONFLICT (shader_id) DO NOTHING`,
+      [from, to],
+    );
   }
   async close() {
     await this.pool.end();

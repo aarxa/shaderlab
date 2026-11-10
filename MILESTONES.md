@@ -10,7 +10,8 @@ prepares you for. Ask Claude to review your PR or explain anything, but write th
 - Title is collaborative: store it in `doc.getMap('meta')` and show it in the header.
 - `POST /api/shaders/:id/fork` copies the current document into a new shader.
 - `GET /api/shaders?cursor=...` returns recent shaders for a gallery page, **cursor-paginated** (not
-  OFFSET), each with a thumbnail (render one frame to a canvas and upload a PNG, or render on view).
+  OFFSET), each with a thumbnail (done: captured in the editor, validated and cached by the server; see
+  docs/THUMBNAILS_EXPLAINED.md).
 - Done when: tests for fork + pagination, gallery page live.
 - Interview prep: why cursor pagination beats OFFSET; schema migrations; what a fork copies.
 
