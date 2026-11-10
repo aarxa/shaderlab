@@ -1,6 +1,6 @@
 // The shader page: collaborative CodeMirror editor on the left, live WebGL preview on the right.
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { yCollab } from 'y-codemirror.next';
@@ -19,8 +19,15 @@ interface Peer {
   color: string;
 }
 
+export const TITLE_MAX = 80;
+
 export function Editor() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
+  const metaRef = useRef<Y.Map<unknown> | null>(null);
+  const [title, setTitle] = useState('');
+  const [forkedFrom, setForkedFrom] = useState<string | null>(null);
+  const [forking, setForking] = useState(false);
   const editorEl = useRef<HTMLDivElement>(null);
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState<Status>('connecting');
@@ -30,8 +37,11 @@ export function Editor() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/shaders/${id}`).then((r) => {
-      if (!cancelled && r.status !== 200) setNotFound(true);
+    fetch(`/api/shaders/${id}`).then(async (r) => {
+      if (cancelled) return;
+      if (r.status !== 200) return setNotFound(true);
+      const meta = (await r.json()) as { forkedFrom: string | null };
+      setForkedFrom(meta.forkedFrom);
     });
     return () => {
       cancelled = true;
@@ -42,6 +52,13 @@ export function Editor() {
     if (!editorEl.current || !canvasEl.current || notFound) return;
     const doc = new Y.Doc();
     const ytext = doc.getText('code');
+    // The title is a key in a shared Y.Map, so it syncs live like the code. Each change replaces the
+    // whole value (last writer wins), which is fine for a short title; the code uses Y.Text, which
+    // merges character by character.
+    const meta = doc.getMap('meta');
+    metaRef.current = meta;
+    const syncTitle = () => setTitle(String(meta.get('title') ?? ''));
+    meta.observe(syncTitle);
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const provider = new WebsocketProvider(`${proto}://${location.host}/collab`, id, doc);
     const me = getIdentity();
@@ -85,11 +102,16 @@ export function Editor() {
           EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { fontFamily: 'ui-monospace, Menlo, monospace' } })],
       }),
     });
-    provider.once('sync', () => recompile());
+    provider.once('sync', () => {
+      recompile();
+      syncTitle();
+    });
 
     return () => {
       window.clearTimeout(compileTimer);
       ytext.unobserve(recompile);
+      meta.unobserve(syncTitle);
+      metaRef.current = null;
       view.destroy();
       renderer.dispose();
       provider.destroy();
@@ -97,12 +119,35 @@ export function Editor() {
     };
   }, [id, notFound]);
 
+  const fork = async () => {
+    setForking(true);
+    try {
+      const res = await fetch(`/api/shaders/${id}/fork`, { method: 'POST' });
+      if (res.ok) navigate(`/s/${((await res.json()) as { id: string }).id}`);
+    } finally {
+      setForking(false);
+    }
+  };
+
   if (notFound) return <div className="center">Shader not found. <a href="/">Make a new one</a></div>;
 
   return (
     <div className="page">
       <header>
-        <a href="/" className="brand">ShaderLab</a>
+        <Link to="/gallery" className="brand">ShaderLab</Link>
+        <div className="title-block">
+          <input
+            className="title"
+            aria-label="Shader title"
+            placeholder="Untitled"
+            maxLength={TITLE_MAX}
+            value={title}
+            onChange={(e) => metaRef.current?.set('title', e.target.value)}
+          />
+          {forkedFrom && (
+            <Link className="forked" to={`/s/${forkedFrom}`}>forked from {forkedFrom}</Link>
+          )}
+        </div>
         <span className={`status ${status}`}>{status}</span>
         <div className="peers">
           {peers.map((p, i) => (
@@ -111,6 +156,7 @@ export function Editor() {
             </span>
           ))}
         </div>
+        <button className="secondary" onClick={fork} disabled={forking}>{forking ? 'Forking…' : 'Fork'}</button>
         <button onClick={() => navigator.clipboard.writeText(location.href)}>Copy share link</button>
       </header>
       <main>
